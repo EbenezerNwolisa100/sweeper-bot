@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Production Build
+dist/
+
+# Local databases
+*.db
+*.db-journal
+
+# Secrets & Environment variables
+.env
+.env.production
+.env.local
+
+# IDE configurations
+.vscode/
+.idea/
+*.log

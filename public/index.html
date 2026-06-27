@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkyApex WaaS Dashboard — Secure Wallet Administration</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Style Sheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  
+  <!-- Ambient background glow elements -->
+  <div class="glow-sphere sphere-1"></div>
+  <div class="glow-sphere sphere-2"></div>
+  
+  <div class="app-container">
+    
+    <!-- Sidebar / Brand Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-logo">
+          <i class="fa-solid fa-cube fa-spin" style="--fa-animation-duration: 10s;"></i>
+        </div>
+        <div class="brand-text">
+          <h1>SkyApex WaaS</h1>
+          <span class="sub-logo">WALLET AS A SERVICE</span>
+        </div>
+      </div>
+      
+      <!-- Stats panel inside sidebar area -->
+      <div class="stats-panel">
+        <div class="stat-card">
+          <span class="stat-label">API Server</span>
+          <span class="stat-value status-online" id="status-api"><i class="fa-solid fa-circle"></i> Connected</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Database</span>
+          <span class="stat-value" id="status-db"><i class="fa-solid fa-database"></i> SQLite Active</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Encryption</span>
+          <span class="stat-value text-gold"><i class="fa-solid fa-lock"></i> AES-256-GCM</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      
+      <!-- Main Actions Grid -->
+      <section class="grid-layout">
+        
+        <!-- Form Panel -->
+        <div class="card glassmorphism">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-circle-plus icon-gold"></i> Generate Web3 Wallet</h2>
+            <p class="card-subtitle">Generate mathematically secure wallets using BIP39 & BIP44 standards.</p>
+          </div>
+          
+          <div class="form-body">
+            <div class="form-group">
+              <label for="blockchain-select"><i class="fa-solid fa-network-wired"></i> Blockchain Network</label>
+              <div class="custom-select-wrapper">
+                <select id="blockchain-select">
+                  <option value="" disabled selected>Loading networks...</option>
+                </select>
+              </div>
+            </div>
+            
+            <button class="btn btn-generate" id="btn-generate">
+              <span>Generate Wallet</span>
+              <i class="fa-solid fa-key"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Result Panel -->
+        <div class="card glassmorphism" id="result-card">
+          <!-- Default State: Empty -->
+          <div class="result-placeholder" id="result-placeholder">
+            <div class="placeholder-icon">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <h3>Awaiting Generation</h3>
+            <p>Select a blockchain network and click generate to derive a new secure cryptocurrency wallet.</p>
+          </div>
+
+          <!-- Active State: Loading -->
+          <div class="result-loading hidden" id="result-loading">
+            <div class="spinner">
+              <i class="fa-solid fa-circle-notch fa-spin"></i>
+            </div>
+            <h3>Deriving Keypairs...</h3>
+            <p>Deriving standard path indices and running secp256k1/ed25519 calculations.</p>
+          </div>
+
+          <!-- Active State: Wallet Details -->
+          <div class="result-details hidden" id="result-details">
+            <div class="result-header">
+              <h3><i class="fa-solid fa-circle-check text-green"></i> Wallet Derived</h3>
+              <span class="badge" id="result-coin-badge">ETH</span>
+            </div>
+
+            <div class="details-body">
+              <!-- Address Display -->
+              <div class="detail-item">
+                <span class="detail-label">Wallet Address</span>
+                <div class="copy-field">
+                  <input type="text" readonly id="val-address" class="font-mono">
+                  <button class="btn-copy" data-target="val-address" title="Copy Address"><i class="fa-regular fa-copy"></i></button>
+                </div>
+              </div>
+
+              <!-- Mnemonic Display (Secure Masked) -->
+              <div class="detail-item">
+                <span class="detail-label">12-Word Recovery Phrase</span>
+                <div class="copy-field secure-field">
+                  <input type="password" readonly id="val-mnemonic" class="font-mono">
+                  <button class="btn-reveal" data-target="val-mnemonic" title="Toggle Visibility"><i class="fa-regular fa-eye-slash"></i></button>
+                  <button class="btn-copy" data-target="val-mnemonic" title="Copy Mnemonic"><i class="fa-regular fa-copy"></i></button>
+                </div>
+              </div>
+
+              <!-- Private Key Display (Secure Masked) -->
+              <div class="detail-item">
+                <span class="detail-label">Private Key</span>
+                <div class="copy-field secure-field">
+                  <input type="password" readonly id="val-private" class="font-mono">
+                  <button class="btn-reveal" data-target="val-private" title="Toggle Visibility"><i class="fa-regular fa-eye-slash"></i></button>
+                  <button class="btn-copy" data-target="val-private" title="Copy Private Key"><i class="fa-regular fa-copy"></i></button>
+                </div>
+              </div>
+
+              <!-- Public Key Display -->
+              <div class="detail-item">
+                <span class="detail-label">Public Key (Hex / Base58)</span>
+                <div class="copy-field">
+                  <input type="text" readonly id="val-public" class="font-mono text-small">
+                  <button class="btn-copy" data-target="val-public" title="Copy Public Key"><i class="fa-regular fa-copy"></i></button>
+                </div>
+              </div>
+
+              <!-- Metadata (Derivation path, USDT Contract Address) -->
+              <div class="metadata-row">
+                <div class="meta-col">
+                  <span class="meta-title">Derivation Path</span>
+                  <span class="meta-value font-mono" id="val-path">m/44'/60'/0'/0/0</span>
+                </div>
+                <div class="meta-col hidden" id="meta-contract-wrapper">
+                  <span class="meta-title">USDT Contract</span>
+                  <span class="meta-value font-mono text-small" id="val-contract">-</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Configuration and Tokens Management Section -->
+      <section class="grid-layout">
+        
+        <!-- Master Sweep Addresses Form -->
+        <div class="card glassmorphism">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-wallet icon-gold"></i> Master Sweep Addresses</h2>
+            <p class="card-subtitle">Define target destination addresses for consolidated/swept assets.</p>
+          </div>
+          <div class="form-body">
+            <div class="form-group">
+              <label for="main-btc-address"><i class="fa-brands fa-bitcoin"></i> Bitcoin (BTC) Master Address</label>
+              <input type="text" id="main-btc-address" placeholder="1... or bc1..." class="input-dark">
+            </div>
+            
+            <div class="form-group">
+              <label for="main-ltc-address"><i class="fa-solid fa-coins"></i> Litecoin (LTC) Master Address</label>
+              <input type="text" id="main-ltc-address" placeholder="L... or M..." class="input-dark">
+            </div>
+            
+            <div class="form-group">
+              <label for="main-evm-address"><i class="fa-brands fa-ethereum"></i> EVM (ETH/BSC/Polygon/USDT) Address</label>
+              <input type="text" id="main-evm-address" placeholder="0x..." class="input-dark">
+            </div>
+            
+            <div class="form-group">
+              <label for="main-sol-address"><i class="fa-solid fa-sun"></i> Solana (SOL/USDT) Address</label>
+              <input type="text" id="main-sol-address" placeholder="Base58 Solana address..." class="input-dark">
+            </div>
+            
+            <div class="form-group">
+              <label for="main-trx-address"><i class="fa-solid fa-shield"></i> TRON (TRX/USDT) Address</label>
+              <input type="text" id="main-trx-address" placeholder="T..." class="input-dark">
+            </div>
+            
+            <button class="btn btn-generate" id="btn-save-settings">
+              <span>Save Master Addresses</span>
+              <i class="fa-solid fa-floppy-disk"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom Contract Token Manager -->
+        <div class="card glassmorphism">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-file-contract icon-gold"></i> Custom Token Contracts</h2>
+            <p class="card-subtitle">Register and manage custom token contract addresses for wallet generation.</p>
+          </div>
+          <div class="form-body">
+            <div class="form-group">
+              <label for="contract-symbol"><i class="fa-solid fa-tag"></i> Token Symbol / Identifier</label>
+              <input type="text" id="contract-symbol" placeholder="e.g. usdc_erc20 or link" class="input-dark">
+            </div>
+            
+            <div class="form-group">
+              <label for="contract-name"><i class="fa-solid fa-signature"></i> Token Name</label>
+              <input type="text" id="contract-name" placeholder="e.g. USD Coin or Chainlink" class="input-dark">
+            </div>
+            
+            <div class="form-group">
+              <label for="contract-network"><i class="fa-solid fa-network-wired"></i> Blockchain Network</label>
+              <div class="custom-select-wrapper">
+                <select id="contract-network">
+                  <option value="ethereum">Ethereum (ERC-20)</option>
+                  <option value="bsc">BNB Smart Chain (BEP-20)</option>
+                  <option value="polygon">Polygon (ERC-20)</option>
+                  <option value="solana">Solana (SPL)</option>
+                  <option value="tron">Tron (TRC-20)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="contract-address"><i class="fa-solid fa-qrcode"></i> Contract Address</label>
+              <input type="text" id="contract-address" placeholder="Contract address on chosen chain" class="input-dark">
+            </div>
+            
+            <button class="btn btn-generate" id="btn-add-contract">
+              <span>Add Custom Token</span>
+              <i class="fa-solid fa-plus"></i>
+            </button>
+          </div>
+          
+          <div class="custom-tokens-list">
+            <h3>Registered Custom Tokens</h3>
+            <div id="contracts-list">
+              <div class="token-placeholder">No custom tokens registered.</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Database Activity Table -->
+      <section class="table-section card glassmorphism">
+        <div class="table-header">
+          <div class="table-title">
+            <h2><i class="fa-solid fa-list-ul icon-gold"></i> Database Registry</h2>
+            <p class="card-subtitle">Encrypted SQLite records of generated wallets</p>
+          </div>
+          
+          <div class="table-actions">
+            <div class="search-box">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="text" id="table-search" placeholder="Filter by address, coin or path...">
+            </div>
+            <button class="btn btn-refresh" id="btn-refresh" title="Reload Registry"><i class="fa-solid fa-arrows-rotate"></i></button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table id="wallets-table">
+            <thead>
+              <tr>
+                <th>Coin</th>
+                <th>Public Address</th>
+                <th>Mnemonic Phrase</th>
+                <th>Private Key</th>
+                <th>Derivation Path</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr>
+                <td colspan="6" class="table-loader">
+                  <i class="fa-solid fa-circle-notch fa-spin"></i> Loading records...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast Notifications Wrapper -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Client Script -->
+  <script src="app.js"></script>
+</body>
+</html>
