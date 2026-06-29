@@ -10,6 +10,7 @@
     "test": "ts-node src/test_microservice.ts"
   },
   "dependencies": {
+    "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.95.8",
     "bip32": "^4.0.0",
     "bip39": "^3.1.0",

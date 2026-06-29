@@ -2,6 +2,7 @@ import { getDatabase } from '../config/db';
 import { decrypt } from './crypto';
 import { ethers } from 'ethers';
 import { Connection, Keypair as SolKeypair, PublicKey, Transaction as SolTransaction, SystemProgram } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync, createTransferInstruction, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
 import { TronWeb } from 'tronweb';
 import * as bitcoin from 'bitcoinjs-lib';
 import ECPairFactory from 'ecpair';
@@ -78,15 +79,25 @@ async function sweepCycle() {
   const mainSol = mainAddresses['main_sol_address'];
   const mainTrx = mainAddresses['main_trx_address'];
 
-  // 2. Fetch all generated wallets
+  // 2. Fetch all custom token contracts to map their networks
+  const customContracts = await db.all('SELECT * FROM custom_contracts');
+  const contractNetworkMap: { [address: string]: string } = {};
+  customContracts.forEach(c => {
+    if (c.address) {
+      contractNetworkMap[c.address.toLowerCase().trim()] = c.network.toLowerCase().trim();
+    }
+  });
+
+  // 3. Fetch all generated wallets
   const wallets = await db.all('SELECT * FROM wallets');
   if (wallets.length === 0) {
     return;
   }
 
-  // 3. Sweep each wallet according to coin type/network
+  // 4. Sweep each wallet according to coin type/network
   for (const wallet of wallets) {
     const coin = wallet.coin.toLowerCase().trim();
+    const contractAddress = wallet.contract_address ? wallet.contract_address.toLowerCase().trim() : null;
     let privateKey: string;
     try {
       privateKey = decrypt(wallet.private_key);
@@ -95,21 +106,57 @@ async function sweepCycle() {
       continue;
     }
 
+    // Resolve network dynamically
+    let network = '';
+    if (contractAddress && contractNetworkMap[contractAddress]) {
+      network = contractNetworkMap[contractAddress];
+    } else {
+      // Fallback for native coins or default seeded USDT tokens
+      if (coin === 'eth' || coin === 'ethereum' || coin === 'usdt_erc20') {
+        network = 'ethereum';
+      } else if (coin === 'bsc') {
+        network = 'bsc';
+      } else if (coin === 'polygon') {
+        network = 'polygon';
+      } else if (coin === 'sol' || coin === 'solana' || coin === 'usdt_sol' || coin === 'usdt_solana') {
+        network = 'solana';
+      } else if (coin === 'trx' || coin === 'tron' || coin === 'usdt_trc20') {
+        network = 'tron';
+      } else if (coin === 'btc' || coin === 'bitcoin') {
+        network = 'bitcoin';
+      } else if (coin === 'ltc' || coin === 'litecoin') {
+        network = 'litecoin';
+      } else {
+        // Fallback using derivation path
+        const pathStr = wallet.derivation_path || '';
+        if (pathStr.includes("44'/0'/")) {
+          network = 'bitcoin';
+        } else if (pathStr.includes("44'/2'/")) {
+          network = 'litecoin';
+        } else if (pathStr.includes("44'/60'/")) {
+          network = 'ethereum'; // Default EVM
+        } else if (pathStr.includes("44'/195'/")) {
+          network = 'tron';
+        } else if (pathStr.includes("44'/501'/")) {
+          network = 'solana';
+        }
+      }
+    }
+
     try {
-      // Determine network
-      if (['eth', 'ethereum', 'bsc', 'polygon', 'usdt_erc20'].includes(coin) || wallet.contract_address && (coin.includes('erc20') || coin.includes('eth') || coin.includes('bsc') || coin.includes('polygon'))) {
-        await sweepEVM(wallet, privateKey, mainEvm);
-      } else if (['sol', 'solana', 'usdt_sol'].includes(coin) || wallet.contract_address && coin.includes('sol')) {
+      if (['ethereum', 'bsc', 'polygon'].includes(network)) {
+        await sweepEVM(wallet, privateKey, mainEvm, network);
+      } else if (network === 'solana') {
         await sweepSolana(wallet, privateKey, mainSol);
-      } else if (['trx', 'tron', 'usdt_trc20'].includes(coin) || wallet.contract_address && coin.includes('trc20')) {
+      } else if (network === 'tron') {
         await sweepTron(wallet, privateKey, mainTrx);
-      } else if (['btc', 'bitcoin'].includes(coin)) {
+      } else if (network === 'bitcoin') {
         await sweepBitcoin(wallet, privateKey, mainBtc);
-      } else if (['ltc', 'litecoin'].includes(coin)) {
+      } else if (network === 'litecoin') {
         await sweepLitecoin(wallet, privateKey, mainLtc);
       }
     } catch (error: any) {
-      console.error(`[Sweeper Error] Failed to sweep address ${wallet.address} (${coin}):`, error.message || error);
+      console.error(`[Sweeper Error] Failed to sweep address ${wallet.address} (${coin}) on network ${network}:`, error.message || error);
     }
   }
 }
@@ -117,15 +164,13 @@ async function sweepCycle() {
 /**
  * Sweeps EVM compatible networks (Ethereum, BSC, Polygon) for Native and ERC-20 balances.
  */
-async function sweepEVM(wallet: any, privateKey: string, targetAddress: string) {
+async function sweepEVM(wallet: any, privateKey: string, targetAddress: string, network: string) {
   if (!targetAddress) return;
 
-  const coin = wallet.coin.toLowerCase();
   let rpcUrl = '';
-
-  if (coin === 'bsc') {
+  if (network === 'bsc') {
     rpcUrl = process.env.BSC_RPC_URL || 'https://binance.llamarpc.com';
-  } else if (coin === 'polygon') {
+  } else if (network === 'polygon') {
     rpcUrl = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
   } else {
     rpcUrl = process.env.ETH_RPC_URL || 'https://rpc.ankr.com/eth'; // Default to Ethereum
@@ -144,7 +189,7 @@ async function sweepEVM(wallet: any, privateKey: string, targetAddress: string) 
       // Check native gas balance
       const nativeBalance = await provider.getBalance(address);
       const feeData = await provider.getFeeData();
-      const gasPrice = feeData.gasPrice || 30000000000n; // fallback to 30 gwei
+      const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 30000000000n; // EIP-1559 compliance with fallback
       const gasLimit = 65000n; // Estimate for token transfer
       const gasCost = gasLimit * gasPrice;
 
@@ -162,7 +207,7 @@ async function sweepEVM(wallet: any, privateKey: string, targetAddress: string) 
     const balance = await provider.getBalance(address);
     if (balance > 0n) {
       const feeData = await provider.getFeeData();
-      const gasPrice = feeData.gasPrice || 30000000000n;
+      const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || 30000000000n;
       const gasLimit = 21000n;
       const gasCost = gasLimit * gasPrice;
 
@@ -172,7 +217,10 @@ async function sweepEVM(wallet: any, privateKey: string, targetAddress: string) 
         const tx = await signer.sendTransaction({
           to: targetAddress,
           value: sweepAmount,
-          gasLimit
+          gasLimit,
+          maxFeePerGas: feeData.maxFeePerGas || undefined,
+          maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || undefined,
+          gasPrice: feeData.maxFeePerGas ? undefined : gasPrice
         });
         await tx.wait();
         console.log(`[Sweeper] Native EVM Sweep Successful! Tx Hash: ${tx.hash}`);
@@ -208,28 +256,62 @@ async function sweepSolana(wallet: any, privateKeyHex: string, targetAddress: st
     if (tokenAccounts.value.length > 0) {
       const tokenAccountInfo = tokenAccounts.value[0].account.data.parsed.info;
       const tokenAmount = tokenAccountInfo.tokenAmount.amount; // String format raw representation
-      const decimals = tokenAccountInfo.tokenAmount.decimals;
 
       if (BigInt(tokenAmount) > 0n) {
         // Confirm gas availability
         const solBalance = await connection.getBalance(address);
-        if (solBalance > 5000) { // Native txn fee is 5000 lamports
-          console.log(`[Sweeper] Solana SPL sweeping is configured. Detected: ${tokenAmount} raw tokens on ${wallet.address}`);
-          // Build and send transaction using standard Web3 Transfer instructions
-          // Note: In real-world context, requires finding destination token address or creating it.
+        const destinationAta = getAssociatedTokenAddressSync(tokenMint, destinationPubkey);
+        const destinationAtaInfo = await connection.getAccountInfo(destinationAta);
+
+        const rentExemptAta = await connection.getMinimumBalanceForRentExemption(165);
+        const fee = 5000;
+        const requiredSol = destinationAtaInfo ? fee : (fee + rentExemptAta);
+
+        if (solBalance >= requiredSol) {
+          console.log(`[Sweeper] Sweeping ${tokenAmount} SPL tokens from ${wallet.address} to ${targetAddress}...`);
+          
+          const transaction = new SolTransaction();
+          if (!destinationAtaInfo) {
+            console.log(`[Sweeper] Destination ATA does not exist. Creating it: ${destinationAta.toBase58()}`);
+            transaction.add(
+              createAssociatedTokenAccountInstruction(
+                address, // payer
+                destinationAta, // associated token address
+                destinationPubkey, // owner
+                tokenMint // mint
+              )
+            );
+          }
+
+          const sourceAta = getAssociatedTokenAddressSync(tokenMint, address);
+          transaction.add(
+            createTransferInstruction(
+              sourceAta,
+              destinationAta,
+              address,
+              BigInt(tokenAmount)
+            )
+          );
+
+          const { blockhash } = await connection.getLatestBlockhash('confirmed');
+          transaction.recentBlockhash = blockhash;
+          transaction.feePayer = address;
+
+          const signature = await connection.sendTransaction(transaction, [keypair]);
+          await connection.confirmTransaction(signature, 'confirmed');
+          console.log(`[Sweeper] Solana SPL Sweep Successful! Tx Signature: ${signature}`);
         } else {
-          console.warn(`[Sweeper Warning] Insufficient SOL gas on ${wallet.address} to sweep SPL tokens.`);
+          console.warn(`[Sweeper Warning] Insufficient SOL gas on ${wallet.address} to sweep SPL tokens. Needs: ${requiredSol / 1e9} SOL, has: ${solBalance / 1e9} SOL.`);
         }
       }
     }
   } else {
     // Native SOL sweeping
     const balance = await connection.getBalance(address);
-    const rentExemptRef = await connection.getMinimumBalanceForRentExemption(0);
     const fee = 5000; // standard tx fee
 
-    if (balance > rentExemptRef + fee) {
-      const sweepAmount = balance - fee - rentExemptRef;
+    if (balance > fee) {
+      const sweepAmount = balance - fee;
       console.log(`[Sweeper] Sweeping ${sweepAmount / 1e9} SOL from ${wallet.address} to ${targetAddress}...`);
       
       const transaction = new SolTransaction().add(
@@ -239,6 +321,10 @@ async function sweepSolana(wallet: any, privateKeyHex: string, targetAddress: st
           lamports: sweepAmount
         })
       );
+
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = address;
 
       const signature = await connection.sendTransaction(transaction, [keypair]);
       await connection.confirmTransaction(signature, 'confirmed');
@@ -275,7 +361,7 @@ async function sweepTron(wallet: any, privateKey: string, targetAddress: string)
 
       if (trxBalance > 15000000) { // ~15 TRX minimum for token fee execution if no energy
         console.log(`[Sweeper] Sweeping TRC-20 tokens from Tron address ${address} to ${targetAddress}...`);
-        const result = await contract.transfer(targetAddress, balance).send();
+        const result = await contract.transfer(targetAddress, balance).send({ feeLimit: 100000000 });
         console.log(`[Sweeper] TRC-20 Sweep Successful! TxID: ${result}`);
       } else {
         console.warn(`[Sweeper Warning] Insufficient TRX gas/fee balance on ${address} to sweep TRC-20. Needs: ~15 TRX.`);
