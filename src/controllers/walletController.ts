@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { getDatabase } from '../config/db';
 import { generateWallet } from '../services/walletGenerator';
 import { encrypt, decrypt } from '../services/crypto';
-
+// HEllo
 /**
  * Handles wallet generation requests.
  * POST /api/wallets/generate
