@@ -249,9 +249,15 @@ async function sweepSolana(wallet: any, privateKeyHex: string, targetAddress: st
     const destinationPubkey = new PublicKey(targetAddress);
 
     // Fetch account SPL info
-    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(address, {
-      mint: tokenMint
-    });
+    let tokenAccounts;
+    try {
+      tokenAccounts = await connection.getParsedTokenAccountsByOwner(address, {
+        mint: tokenMint
+      });
+    } catch (err: any) {
+      console.warn(`[Sweeper Warning] Could not fetch token account for mint ${wallet.contract_address} (likely does not exist on this network): ${err.message || err}`);
+      return;
+    }
 
     if (tokenAccounts.value.length > 0) {
       const tokenAccountInfo = tokenAccounts.value[0].account.data.parsed.info;
